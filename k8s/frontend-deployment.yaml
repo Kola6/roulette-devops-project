@@ -1,1 +1,20 @@
-# Placeholder content for frontend-deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: roulette-frontend
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: roulette-frontend
+  template:
+    metadata:
+      labels:
+        app: roulette-frontend
+    spec:
+      containers:
+        - name: frontend
+          image: rouletteacr.azurecr.io/roulette-frontend:latest
+          ports:
+            - containerPort: 80
+
