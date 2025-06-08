@@ -8,20 +8,20 @@ This is a sample internal-use-only roulette game project designed for deployment
 
                 ┌────────────────────────────────────┐
                 │       Internal Web Browser         │
-                │  http://roulette.internal.company.com │
+                http://roulette.internal.company.com │
                 └────────────────────────────────────┘
                              │
                              ▼
      ┌────────────────────────────────────────────┐
      │   Azure Private DNS Zone (internal.company.com) │
-     │   - A record: roulette → 10.240.0.10              │
+     │ A record: roulette → 10.240.0.10              │
      └────────────────────────────────────────────┘
                              │
                              ▼
      ┌────────────────────────────────────────────┐
      │     AKS Cluster + NGINX Ingress Controller  │
      │     - Internal Load Balancer (Private IP)   │
-     │     - Whitelist IPs: 10.0.0.0/24, etc.       │
+     │    - Whitelist IPs: 10.0.0.0/24, etc.       │
      └────────────────────────────────────────────┘
                              │
                              ▼
