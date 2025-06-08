@@ -7,5 +7,7 @@ db_username         = "pgadmin"
 dns_zone_name       = "internal.company.com"
 vnet_name           = "roulette-vnet"
 subnet_name         = "roulette-subnet"
+kv_name             = "roulette-kv"
+
 
 
