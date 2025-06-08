@@ -2,28 +2,17 @@ provider "azurerm" {
   features {}
 }
 
-# RESOURCE GROUP
+resource "random_password" "db" {
+  length  = 20
+  special = true
+}
+
 resource "azurerm_resource_group" "main" {
   name     = var.resource_group_name
   location = var.location
 }
 
-# VIRTUAL NETWORK
-resource "azurerm_virtual_network" "vnet" {
-  name                = "roulette-vnet"
-  address_space       = ["10.0.0.0/16"]
-  location            = var.location
-  resource_group_name = var.resource_group_name
-}
-
-resource "azurerm_subnet" "aks" {
-  name                 = "aks-subnet"
-  resource_group_name  = var.resource_group_name
-  virtual_network_name = azurerm_virtual_network.vnet.name
-  address_prefixes     = ["10.0.1.0/24"]
-}
-
-# ACR
+# Azure Container Registry
 resource "azurerm_container_registry" "acr" {
   name                = var.acr_name
   resource_group_name = var.resource_group_name
@@ -32,7 +21,22 @@ resource "azurerm_container_registry" "acr" {
   admin_enabled       = true
 }
 
-# AKS
+# Virtual Network & Subnet
+resource "azurerm_virtual_network" "vnet" {
+  name                = var.vnet_name
+  address_space       = ["10.0.0.0/16"]
+  location            = var.location
+  resource_group_name = var.resource_group_name
+}
+
+resource "azurerm_subnet" "subnet" {
+  name                 = var.subnet_name
+  address_prefixes     = ["10.0.1.0/24"]
+  resource_group_name  = var.resource_group_name
+  virtual_network_name = azurerm_virtual_network.vnet.name
+}
+
+# AKS Cluster
 resource "azurerm_kubernetes_cluster" "aks" {
   name                = var.aks_name
   location            = var.location
@@ -43,46 +47,65 @@ resource "azurerm_kubernetes_cluster" "aks" {
     name       = "default"
     node_count = 1
     vm_size    = "Standard_DS2_v2"
-    vnet_subnet_id = azurerm_subnet.aks.id
   }
 
   identity {
     type = "SystemAssigned"
   }
 
-  depends_on = [azurerm_container_registry.acr]
+  network_profile {
+    network_plugin = "azure"
+  }
 }
 
-# POSTGRESQL FLEXIBLE SERVER
+# PostgreSQL Flexible Server
 resource "azurerm_postgresql_flexible_server" "db" {
   name                   = "roulette-db"
   resource_group_name    = var.resource_group_name
   location               = var.location
   version                = "12"
   administrator_login    = var.db_username
-  administrator_password = var.db_password
+  administrator_password = random_password.db.result
   sku_name               = "B1ms"
   storage_mb             = 32768
+  zone                   = "1"
+
+  authentication {
+    active_directory_auth_enabled = false
+    password_auth_enabled         = true
+  }
+
+  high_availability {
+    mode = "Disabled"
+  }
+
+  backup {
+    backup_retention_days = 7
+    geo_redundant_backup  = "Disabled"
+  }
+
+  storage {
+    auto_grow_enabled = true
+  }
 }
 
-resource "azurerm_postgresql_flexible_server_database" "roulette" {
+resource "azurerm_postgresql_flexible_server_database" "roulette_db" {
   name      = "roulettegamedb"
   server_id = azurerm_postgresql_flexible_server.db.id
   charset   = "UTF8"
-  collation = "English_United States.1252"
+  collation = "en_US.utf8"
 }
 
-# PRIVATE DNS ZONE FOR INTERNAL ACCESS
+# Private DNS Zone
 resource "azurerm_private_dns_zone" "internal_dns" {
-  name                = "internal.company.com"
+  name                = var.dns_zone_name
   resource_group_name = var.resource_group_name
 }
 
 resource "azurerm_private_dns_zone_virtual_network_link" "dns_link" {
-  name                  = "link-vnet"
+  name                  = "dns-link"
   resource_group_name   = var.resource_group_name
   private_dns_zone_name = azurerm_private_dns_zone.internal_dns.name
   virtual_network_id    = azurerm_virtual_network.vnet.id
   registration_enabled  = false
 }
-
