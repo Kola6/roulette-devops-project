@@ -1,1 +1,99 @@
-# Placeholder content for azure-pipelines-frontend.yml
+trigger:
+  branches:
+    include:
+      - main
+
+pool:
+  vmImage: 'ubuntu-latest'
+
+variables:
+  dockerRegistryServiceConnection: 'devDockerRegistryConnection'
+  imageName: 'roulette-frontend'
+  azureSubscription: 'MyAzureDevSubscription'
+  resourceGroup: 'roulette-dev-rg'
+  kubernetesCluster: 'rouletteaks'
+  namespace: 'default'
+  sonarQubeConnection: 'SonarQubeConnection'
+
+jobs:
+
+- job: TerraformApply
+  displayName: 'Terraform Init, Plan, and Apply'
+  steps:
+    - task: AzureCLI@2
+      inputs:
+        azureSubscription: $(azureSubscription)
+        scriptType: bash
+        scriptLocation: inlineScript
+        inlineScript: |
+          cd terraform
+          terraform init \
+            -backend-config="resource_group_name=$(resourceGroup)" \
+            -backend-config="storage_account_name=roulettestorage" \
+            -backend-config="container_name=tfstate" \
+            -backend-config="key=roulette.tfstate"
+
+          terraform plan -var-file=terraform.tfvars
+          terraform apply -auto-approve -var-file=terraform.tfvars
+
+- job: BuildTestFrontend
+  displayName: 'Build and Test Frontend'
+  dependsOn: TerraformApply
+  steps:
+    - task: SonarQubePrepare@5
+      inputs:
+        SonarQube: $(sonarQubeConnection)
+        scannerMode: CLI
+        configMode: manual
+        cliProjectKey: 'roulette-frontend'
+        cliSources: 'frontend'
+
+    - task: Docker@2
+      displayName: 'Build Frontend Docker Image'
+      inputs:
+        containerRegistry: $(dockerRegistryServiceConnection)
+        repository: $(imageName)
+        command: build
+        Dockerfile: 'frontend/Dockerfile'
+        tags: latest
+
+    - script: |
+        echo "No tests defined, skipping test stage."
+      displayName: 'Run Frontend Tests'
+
+    - task: SonarQubeAnalyze@5
+      displayName: 'Run SonarQube Analysis'
+
+    - task: SonarQubePublish@5
+      inputs:
+        pollingTimeoutSec: '300'
+      displayName: 'Publish SonarQube Results'
+
+- job: ScanFrontendImage
+  displayName: 'Trivy Vulnerability Scan'
+  dependsOn: BuildTestFrontend
+  steps:
+    - script: |
+        curl -sSfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh
+        ./trivy image roulette-frontend:latest || true
+      displayName: 'Trivy Scan: Docker Image'
+
+    - script: |
+        ./trivy config frontend/Dockerfile || true
+      displayName: 'Trivy Scan: Dockerfile (IaC)'
+
+- job: DeployToAKS
+  displayName: 'Deploy Frontend to AKS'
+  dependsOn: ScanFrontendImage
+  steps:
+    - task: Kubernetes@1
+      displayName: 'Deploy frontend YAML to AKS'
+      inputs:
+        connectionType: Azure Resource Manager
+        azureSubscription: $(azureSubscription)
+        azureResourceGroup: $(resourceGroup)
+        kubernetesCluster: $(kubernetesCluster)
+        namespace: $(namespace)
+        command: apply
+        arguments: '-f k8s/frontend-deployment.yaml -f k8s/frontend-service.yaml'
+
