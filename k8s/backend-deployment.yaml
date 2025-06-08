@@ -1,9 +1,9 @@
-# Placeholder content for backend-deployment.yamlapiVersion: apps/v1
+apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: roulette-backend
 spec:
-  replicas: 2
+  replicas: 1
   selector:
     matchLabels:
       app: roulette-backend
@@ -17,3 +17,16 @@ spec:
           image: rouletteacr.azurecr.io/roulette-backend:latest
           ports:
             - containerPort: 4000
+          env:
+            - name: DB_HOST
+              value: "roulette-db.postgres.database.azure.com"
+            - name: DB_USER
+              value: "pgadmin"
+            - name: DB_NAME
+              value: "roulettegamedb"
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: db-secret
+                  key: password
+
