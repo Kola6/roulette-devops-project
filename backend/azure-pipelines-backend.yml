@@ -7,75 +7,67 @@ pool:
   vmImage: 'ubuntu-latest'
 
 variables:
-  azureSubscription: 'MyAzureDevSubscription'
   dockerRegistryServiceConnection: 'devDockerRegistryConnection'
   imageName: 'roulette-backend'
+  azureSubscription: 'MyAzureDevSubscription'
   resourceGroup: 'roulette-dev-rg'
   kubernetesCluster: 'roulette-aks'
   namespace: 'default'
-  terraformWorkingDir: 'terraform'
+  kvName: 'roulette-kv'
 
-stages:
-# ────────────────────────────────
-- stage: Terraform
-  displayName: 'Provision Infrastructure'
-  jobs:
-  - job: TerraformApply
-    displayName: 'Terraform Init, Plan, Apply'
-    steps:
+jobs:
+
+- job: TerraformBackend
+  displayName: 'Terraform Init, Plan & Apply'
+  steps:
     - task: AzureCLI@2
       inputs:
         azureSubscription: $(azureSubscription)
         scriptType: bash
         scriptLocation: inlineScript
-        workingDirectory: $(terraformWorkingDir)
         inlineScript: |
+          cd terraform
           terraform init \
-            -backend-config="resource_group_name=$(resourceGroup)" \
+            -backend-config="resource_group_name=roulette-dev-rg" \
             -backend-config="storage_account_name=roulettestorage" \
             -backend-config="container_name=tfstate" \
             -backend-config="key=roulette.tfstate"
-          terraform plan -out=tfplan
-          terraform apply -auto-approve tfplan
+          terraform apply -auto-approve
 
-- stage: BuildAndPush
-  displayName: 'Build and Push Backend Docker Image'
-  dependsOn: Terraform
-  jobs:
-  - job: DockerBuild
-    displayName: 'Build and Push Image to ACR'
-    steps:
+- job: BuildTestBackend
+  dependsOn: TerraformBackend
+  displayName: 'Build & Test Backend'
+  steps:
     - task: Docker@2
-      displayName: 'Build and Push'
       inputs:
         containerRegistry: $(dockerRegistryServiceConnection)
         repository: $(imageName)
-        command: buildAndPush
+        command: build
         Dockerfile: backend/Dockerfile
-        tags: |
-          latest
+        tags: latest
 
-- stage: SecurityScan
-  displayName: 'Trivy Security Scan (Optional)'
-  dependsOn: BuildAndPush
-  jobs:
-  - job: TrivyScan
-    displayName: 'Run Trivy on Backend Image'
-    steps:
     - script: |
-        curl -sSfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh
-        ./trivy image roulette-backend:latest || true
-      displayName: 'Trivy Image Vulnerability Scan'
+        docker run --rm roulette-backend:latest npm test
+      displayName: 'Run Backend Tests'
 
-- stage: Deploy
+- job: CreateBackendSecret
+  dependsOn: BuildTestBackend
+  displayName: 'Retrieve DB Password from Key Vault'
+  steps:
+    - task: AzureCLI@2
+      inputs:
+        azureSubscription: $(azureSubscription)
+        scriptType: bash
+        scriptLocation: inlineScript
+        inlineScript: |
+          DB_PASSWORD=$(az keyvault secret show --vault-name $(kvName) --name db-password --query value -o tsv)
+          echo "##vso[task.setvariable variable=DB_PASSWORD;issecret=true]$DB_PASSWORD"
+
+- job: DeployBackend
+  dependsOn: CreateBackendSecret
   displayName: 'Deploy Backend to AKS'
-  dependsOn: BuildAndPush
-  jobs:
-  - job: DeployBackend
-    displayName: 'kubectl apply backend manifests'
-    steps:
+  steps:
     - task: Kubernetes@1
-      displayName: 'Deploy Backend to AKS'
       inputs:
         connectionType: 'Azure Resource Manager'
         azureSubscription: $(azureSubscription)
@@ -83,4 +75,4 @@ stages:
         kubernetesCluster: $(kubernetesCluster)
         namespace: $(namespace)
         command: apply
-        arguments: '-f k8s/backend-deployment.yaml -f k8s/backend-service.yaml'
+        arguments: '-f k8s/backend-deployment.yaml'
