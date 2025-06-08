@@ -1,1 +1,14 @@
-# Placeholder content for package.json
+{
+  "name": "roulette-frontend",
+  "version": "1.0.0",
+  "private": true,
+  "dependencies": {
+    "react": "^18.0.0",
+    "react-dom": "^18.0.0"
+  },
+  "scripts": {
+    "start": "npx serve -s build",
+    "build": "npx react-scripts build"
+  }
+}
+
