@@ -6,4 +6,3 @@ terraform {
     key                  = "roulette.tfstate"
   }
 }
-
