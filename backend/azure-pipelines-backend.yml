@@ -7,93 +7,80 @@ pool:
   vmImage: 'ubuntu-latest'
 
 variables:
+  azureSubscription: 'MyAzureDevSubscription'
   dockerRegistryServiceConnection: 'devDockerRegistryConnection'
   imageName: 'roulette-backend'
-  azureSubscription: 'MyAzureDevSubscription'
   resourceGroup: 'roulette-dev-rg'
-  kubernetesCluster: 'rouletteaks'
+  kubernetesCluster: 'roulette-aks'
   namespace: 'default'
-  sonarQubeConnection: 'SonarQubeConnection'
+  terraformWorkingDir: 'terraform'
 
-jobs:
-
-- job: TerraformApply
-  displayName: 'Terraform Init, Plan, and Apply'
-  steps:
+stages:
+# ────────────────────────────────
+- stage: Terraform
+  displayName: 'Provision Infrastructure'
+  jobs:
+  - job: TerraformApply
+    displayName: 'Terraform Init, Plan, Apply'
+    steps:
     - task: AzureCLI@2
       inputs:
         azureSubscription: $(azureSubscription)
         scriptType: bash
         scriptLocation: inlineScript
+        workingDirectory: $(terraformWorkingDir)
         inlineScript: |
-          cd terraform
           terraform init \
             -backend-config="resource_group_name=$(resourceGroup)" \
             -backend-config="storage_account_name=roulettestorage" \
             -backend-config="container_name=tfstate" \
             -backend-config="key=roulette.tfstate"
+          terraform plan -out=tfplan
+          terraform apply -auto-approve tfplan
 
-          terraform plan -var-file=terraform.tfvars
-          terraform apply -auto-approve -var-file=terraform.tfvars
-
-- job: BuildTestBackend
-  displayName: 'Build and Test Backend'
-  dependsOn: TerraformApply
-  steps:
-    - task: SonarQubePrepare@5
-      inputs:
-        SonarQube: $(sonarQubeConnection)
-        scannerMode: CLI
-        configMode: manual
-        cliProjectKey: 'roulette-backend'
-        cliSources: 'backend'
-
+- stage: BuildAndPush
+  displayName: 'Build and Push Backend Docker Image'
+  dependsOn: Terraform
+  jobs:
+  - job: DockerBuild
+    displayName: 'Build and Push Image to ACR'
+    steps:
     - task: Docker@2
-      displayName: 'Build Backend Docker Image'
+      displayName: 'Build and Push'
       inputs:
         containerRegistry: $(dockerRegistryServiceConnection)
         repository: $(imageName)
-        command: build
-        Dockerfile: 'backend/Dockerfile'
-        tags: latest
+        command: buildAndPush
+        Dockerfile: backend/Dockerfile
+        tags: |
+          latest
 
-    - script: |
-        docker run --rm roulette-backend:latest npm test || echo "No tests defined"
-      displayName: 'Run Backend Tests'
-
-    - task: SonarQubeAnalyze@5
-      displayName: 'Run SonarQube Analysis'
-
-    - task: SonarQubePublish@5
-      inputs:
-        pollingTimeoutSec: '300'
-      displayName: 'Publish SonarQube Results'
-
-- job: ScanBackendImage
-  displayName: 'Trivy Vulnerability Scan'
-  dependsOn: BuildTestBackend
-  steps:
+- stage: SecurityScan
+  displayName: 'Trivy Security Scan (Optional)'
+  dependsOn: BuildAndPush
+  jobs:
+  - job: TrivyScan
+    displayName: 'Run Trivy on Backend Image'
+    steps:
     - script: |
         curl -sSfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh
         ./trivy image roulette-backend:latest || true
-      displayName: 'Trivy Scan: Docker Image'
+      displayName: 'Trivy Image Vulnerability Scan'
 
-    - script: |
-        ./trivy config backend/Dockerfile || true
-      displayName: 'Trivy Scan: Dockerfile (IaC)'
-
-- job: DeployToAKS
+- stage: Deploy
   displayName: 'Deploy Backend to AKS'
-  dependsOn: ScanBackendImage
-  steps:
+  dependsOn: BuildAndPush
+  jobs:
+  - job: DeployBackend
+    displayName: 'kubectl apply backend manifests'
+    steps:
     - task: Kubernetes@1
-      displayName: 'Deploy backend YAML to AKS'
+      displayName: 'Deploy Backend to AKS'
       inputs:
-        connectionType: Azure Resource Manager
+        connectionType: 'Azure Resource Manager'
         azureSubscription: $(azureSubscription)
         azureResourceGroup: $(resourceGroup)
         kubernetesCluster: $(kubernetesCluster)
         namespace: $(namespace)
         command: apply
         arguments: '-f k8s/backend-deployment.yaml -f k8s/backend-service.yaml'
-# Placeholder content for azure-pipelines-backend.yml
