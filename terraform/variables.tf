@@ -3,3 +3,6 @@ variable "location" {}
 variable "acr_name" {}
 variable "aks_name" {}
 variable "dns_prefix" {}
+variable "db_username" {}
+variable "db_password" {}
+
