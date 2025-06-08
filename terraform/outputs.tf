@@ -15,11 +15,10 @@ output "db_password" {
   sensitive = true
 }
 
+output "key_vault_uri" {
+  value = azurerm_key_vault.kv.vault_uri
+}
+
 output "dns_zone_name" {
   value = azurerm_private_dns_zone.internal_dns.name
 }
-
-output "vnet_name" {
-  value = azurerm_virtual_network.vnet.name
-}
-
