@@ -3,7 +3,7 @@ kind: Deployment
 metadata:
   name: roulette-frontend
 spec:
-  replicas: 2
+  replicas: 1
   selector:
     matchLabels:
       app: roulette-frontend
@@ -16,5 +16,6 @@ spec:
         - name: frontend
           image: rouletteacr.azurecr.io/roulette-frontend:latest
           ports:
-            - containerPort: 80
+            - containerPort: 3000
+
 
