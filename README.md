@@ -6,7 +6,6 @@ This is a sample internal-use-only roulette game project designed for deployment
 
 ## 🧱 Architecture Overview
 
-```plaintext
                 ┌────────────────────────────────────┐
                 │       Internal Web Browser         │
                 │  http://roulette.internal.company.com │
@@ -39,21 +38,24 @@ This is a sample internal-use-only roulette game project designed for deployment
 
 ## 🧰 Project Features
 
-- 🔐 Internal-only app using private DNS and IP whitelisting
-- ☸️ Deployed to AKS with Ingress Controller
-- 🔄 CI/CD via Azure Pipelines
-- 🛠️ Infrastructure as Code (Terraform)
-- 🐘 PostgreSQL DB with secrets managed via Azure Key Vault
+- 🔐 **Internal-only** app using Azure Private DNS and IP Whitelisting
+- ☸️ Deployed to **AKS** with **NGINX Ingress** (internal-only load balancer)
+- 🔄 **CI/CD via Azure Pipelines**
+- 🛠️ Fully provisioned with **Terraform**
+- 🐘 **PostgreSQL DB** with secrets in **Azure Key Vault**
+- 🧪 **Security Scanning** with **Trivy** and **SonarQube**
 
 ---
 
 ## 🚀 Tech Stack
 
-- Frontend: React (Node 18)
-- Backend: Node.js + GraphQL
-- Infra: Terraform, Azure, AKS, ACR, Key Vault
-- DevOps: Azure Pipelines
-- Security: Trivy, SonarQube, IP whitelisting
+| Layer         | Technology                       |
+|---------------|----------------------------------|
+| Frontend      | React (Node.js 18)               |
+| Backend       | Node.js + GraphQL                |
+| Infrastructure| Terraform, AKS, ACR, Key Vault   |
+| DevOps        | Azure Pipelines (YAML-based)     |
+| Security      | SonarQube, Trivy, Private DNS    |
 
 ---
 
@@ -71,11 +73,53 @@ roulette-game/
 
 ---
 
-## 🛡️ Internal Access Only
+## 🛡️ Private Access Only
 
-Only accessible from whitelisted IPs via:
-```
+### ✅ 1. Deploy NGINX Ingress Controller (Internal)
+
+```bash
+helm repo add ingress-nginx https://kubernetes.github.io/ingress-nginx
+helm repo update
+
+helm upgrade --install ingress-nginx ingress-nginx \
+  --namespace ingress-basic --create-namespace \
+  --set controller.service.annotations."service\\.beta\\.kubernetes\\.io/azure-load-balancer-internal"="true"
+
+✅ 2. Get Assigned Internal Load Balancer IP
+
+kubectl get svc ingress-nginx-controller -n ingress-basic
+
+✅ 3. Create Azure Private DNS Zone
+
+az network private-dns zone create \
+  --resource-group roulette-dev-rg \
+  --name internal.company.com
+
+Link to your VNet:
+
+az network private-dns link vnet create \
+  --resource-group roulette-dev-rg \
+  --zone-name internal.company.com \
+  --name link-to-aks-vnet \
+  --virtual-network roulette-vnet \
+  --registration-enabled false
+
+✅ 4. Add DNS Record
+
+az network private-dns record-set a add-record \
+  --resource-group roulette-dev-rg \
+  --zone-name internal.company.com \
+  --record-set-name roulette \
+  --ipv4-address 10.240.0.10
+
+
+🛡️ Internal Access Only
+The app is only accessible from internal whitelisted IPs:
+
+
 http://roulette.internal.company.com
-```
 
-Ensure proper DNS linking, internal ILB configuration, and source-range whitelist are in place.
+
+
+
+
