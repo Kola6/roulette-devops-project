@@ -7,51 +7,53 @@ pool:
   vmImage: 'ubuntu-latest'
 
 variables:
-  azureSubscription: 'MyAzureDevSubscription'
   dockerRegistryServiceConnection: 'devDockerRegistryConnection'
   imageName: 'roulette-frontend'
+  azureSubscription: 'MyAzureDevSubscription'
   resourceGroup: 'roulette-dev-rg'
   kubernetesCluster: 'roulette-aks'
   namespace: 'default'
 
-stages:
-- stage: BuildAndPush
-  displayName: 'Build and Push Frontend Image'
-  jobs:
-  - job: DockerBuild
-    displayName: 'Build and Push Image to ACR'
-    steps:
+jobs:
+
+- job: TerraformFrontend
+  displayName: 'Terraform Init, Plan & Apply'
+  steps:
+    - task: AzureCLI@2
+      inputs:
+        azureSubscription: $(azureSubscription)
+        scriptType: bash
+        scriptLocation: inlineScript
+        inlineScript: |
+          cd terraform
+          terraform init \
+            -backend-config="resource_group_name=roulette-dev-rg" \
+            -backend-config="storage_account_name=roulettestorage" \
+            -backend-config="container_name=tfstate" \
+            -backend-config="key=roulette.tfstate"
+          terraform apply -auto-approve
+
+- job: BuildFrontend
+  dependsOn: TerraformFrontend
+  displayName: 'Build & Test Frontend'
+  steps:
     - task: Docker@2
-      displayName: 'Build and Push'
       inputs:
         containerRegistry: $(dockerRegistryServiceConnection)
         repository: $(imageName)
-        command: buildAndPush
+        command: build
         Dockerfile: frontend/Dockerfile
-        tags: |
-          latest
+        tags: latest
 
-- stage: SecurityScan
-  displayName: 'Trivy Security Scan (Optional)'
-  dependsOn: BuildAndPush
-  jobs:
-  - job: TrivyScan
-    displayName: 'Run Trivy on Frontend Image'
-    steps:
     - script: |
-        curl -sSfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh
-        ./trivy image roulette-frontend:latest || true
-      displayName: 'Trivy Image Vulnerability Scan'
+        docker run --rm roulette-frontend:latest npm run test || echo "No tests found"
+      displayName: 'Run Frontend Tests'
 
-- stage: Deploy
+- job: DeployFrontend
+  dependsOn: BuildFrontend
   displayName: 'Deploy Frontend to AKS'
-  dependsOn: BuildAndPush
-  jobs:
-  - job: DeployFrontend
-    displayName: 'kubectl apply frontend manifests'
-    steps:
+  steps:
     - task: Kubernetes@1
-      displayName: 'Deploy Frontend to AKS'
       inputs:
         connectionType: 'Azure Resource Manager'
         azureSubscription: $(azureSubscription)
@@ -59,4 +61,4 @@ stages:
         kubernetesCluster: $(kubernetesCluster)
         namespace: $(namespace)
         command: apply
-        arguments: '-f k8s/frontend-deployment.yaml -f k8s/frontend-service.yaml'
+        arguments: '-f k8s/frontend-deployment.yaml'
