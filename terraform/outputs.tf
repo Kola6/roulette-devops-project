@@ -10,12 +10,16 @@ output "db_fqdn" {
   value = azurerm_postgresql_flexible_server.db.fqdn
 }
 
+output "db_password" {
+  value     = random_password.db.result
+  sensitive = true
+}
+
 output "dns_zone_name" {
   value = azurerm_private_dns_zone.internal_dns.name
 }
 
-output "aks_kube_config" {
-  value     = azurerm_kubernetes_cluster.aks.kube_config_raw
-  sensitive = true
+output "vnet_name" {
+  value = azurerm_virtual_network.vnet.name
 }
 
