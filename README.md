@@ -36,26 +36,52 @@ This is a sample internal-use-only roulette game project designed for deployment
 
 ---
 
-## 🧰 Project Features
+🛠️ Key Features
+🔒 Internal-only app using Azure Private DNS + ILB
 
-- 🔐 **Internal-only** app using Azure Private DNS and IP Whitelisting
-- ☸️ Deployed to **AKS** with **NGINX Ingress** (internal-only load balancer)
-- 🔄 **CI/CD via Azure Pipelines**
-- 🛠️ Fully provisioned with **Terraform**
-- 🐘 **PostgreSQL DB** with secrets in **Azure Key Vault**
-- 🧪 **Security Scanning** with **Trivy** and **SonarQube**
+☸️ Deployed to AKS behind NGINX Ingress (internal)
+
+🔁 Fully automated CI/CD via Azure Pipelines
+
+🛠️ Infrastructure-as-Code with Terraform
+
+🔐 PostgreSQL with random password stored in Key Vault
+
+🧪 Code scanning using Trivy and SonarQube
+
+
+⚙️ Prerequisites
+Azure CLI installed and logged in
+
+Terraform >= 1.3
+
+Helm 3
+
+Kubectl configured with AKS
+
+Azure DevOps project with pipelines enabled
+
+A private VNet + subnet for AKS
 
 ---
 
 ## 🚀 Tech Stack
 
-| Layer         | Technology                       |
-|---------------|----------------------------------|
-| Frontend      | React (Node.js 18)               |
-| Backend       | Node.js + GraphQL                |
-| Infrastructure| Terraform, AKS, ACR, Key Vault   |
-| DevOps        | Azure Pipelines (YAML-based)     |
-| Security      | SonarQube, Trivy, Private DNS    |
+
+| Layer          | Technology                           |
+|----------------|---------------------------------------|
+| **Frontend**   | React (Node.js 18)                    |
+| **Backend**    | Node.js + GraphQL                     |
+| **Database**   | PostgreSQL Flexible Server (Azure)    |
+| **Secrets**    | Azure Key Vault                       |
+| **Infrastructure** | Terraform                        |
+| **Platform**   | AKS (Azure Kubernetes Service)        |
+| **DevOps**     | Azure Pipelines                       |
+| **Registry**   | Azure Container Registry (ACR)        |
+| **Ingress**    | NGINX with Internal Load Balancer     |
+| **DNS**        | Azure Private DNS Zone                |
+| **Security**   | SonarQube, Trivy                      |
+
 
 ---
 
@@ -63,21 +89,21 @@ This is a sample internal-use-only roulette game project designed for deployment
 
 ```
 roulette-game/
-├── backend/                    # GraphQL backend
-├── frontend/                   # React app frontend
-├── terraform/                  # Infrastructure as Code
-├── k8s/                        # Kubernetes manifests
-├── azure-pipelines.yml         # Root CI pipeline
-└── .env                        # Environment config
+├── backend/                    # GraphQL backend (Node.js)
+├── frontend/                   # React frontend
+├── k8s/                        # Deployment/Service/Ingress YAMLs
+├── terraform/                  # AKS, DB, Key Vault, DNS, ACR
+├── .env                        # Local environment variables
+└── README.md                   # Project documentation
+
 ```
 
 ---
 
 ## 🛡️ Private Access Only
 
-### ✅ 1. Deploy NGINX Ingress Controller (Internal)
+✅ Configure Ingress (Internal Only)
 
-```bash
 helm repo add ingress-nginx https://kubernetes.github.io/ingress-nginx
 helm repo update
 
@@ -85,7 +111,7 @@ helm upgrade --install ingress-nginx ingress-nginx \
   --namespace ingress-basic --create-namespace \
   --set controller.service.annotations."service\\.beta\\.kubernetes\\.io/azure-load-balancer-internal"="true"
 
-✅ 2. Get Assigned Internal Load Balancer IP
+✅ Get Assigned Internal Load Balancer IP
 
 kubectl get svc ingress-nginx-controller -n ingress-basic
 
