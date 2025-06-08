@@ -7,6 +7,8 @@ variable "db_username" {}
 variable "dns_zone_name" {}
 variable "vnet_name" {}
 variable "subnet_name" {}
+variable "kv_name" {}
+
 
 
 
