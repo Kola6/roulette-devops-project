@@ -12,7 +12,23 @@ resource "azurerm_resource_group" "main" {
   location = var.location
 }
 
-# Azure Container Registry
+resource "azurerm_key_vault" "kv" {
+  name                = var.kv_name
+  location            = var.location
+  resource_group_name = var.resource_group_name
+  tenant_id           = data.azurerm_client_config.current.tenant_id
+  sku_name            = "standard"
+}
+
+data "azurerm_client_config" "current" {}
+
+resource "azurerm_key_vault_secret" "db_password" {
+  name         = "db-password"
+  value        = random_password.db.result
+  key_vault_id = azurerm_key_vault.kv.id
+}
+
+# ACR
 resource "azurerm_container_registry" "acr" {
   name                = var.acr_name
   resource_group_name = var.resource_group_name
@@ -21,7 +37,7 @@ resource "azurerm_container_registry" "acr" {
   admin_enabled       = true
 }
 
-# Virtual Network & Subnet
+# VNet & Subnet
 resource "azurerm_virtual_network" "vnet" {
   name                = var.vnet_name
   address_space       = ["10.0.0.0/16"]
@@ -36,7 +52,7 @@ resource "azurerm_subnet" "subnet" {
   virtual_network_name = azurerm_virtual_network.vnet.name
 }
 
-# AKS Cluster
+# AKS
 resource "azurerm_kubernetes_cluster" "aks" {
   name                = var.aks_name
   location            = var.location
