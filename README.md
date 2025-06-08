@@ -1,4 +1,4 @@
-# 🎲 Roulette Game for Internal Home Users
+# 🎲 Roulette Game for Private Users Only
 
 This is a sample internal-use-only roulette game project designed for deployment inside a secure Azure VNet environment using Kubernetes, Terraform, and Azure DevOps CI/CD.
 
